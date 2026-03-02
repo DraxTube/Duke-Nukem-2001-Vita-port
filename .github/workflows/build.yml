@@ -23,7 +23,6 @@ jobs:
           vdpm libogg
           vdpm libvorbis
           vdpm flac
-          vdpm mikmod
           vdpm SDL2
           vdpm SDL_mixer
           vdpm SDL2_mixer
