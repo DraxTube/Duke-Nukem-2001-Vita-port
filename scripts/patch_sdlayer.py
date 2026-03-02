@@ -1,8 +1,15 @@
 """
 Patch sdlayer.cpp to skip the EDuke32 Vita GRP launcher UI
 and directly load DNF 2001 mod files.
+
+The original psp2_main does:
+1. Initialize SceAppUtil, power clocks, vita2d, textures, framebuffer
+2. Show a GUI to select GRP files (launcher loop)
+3. Call app_main with selected arguments
+
+We keep step 1 (critical for video/rendering) and replace steps 2-3
+with a direct app_main call using DNF arguments.
 """
-import re
 import sys
 
 def patch_sdlayer(filepath):
@@ -13,56 +20,93 @@ def patch_sdlayer(filepath):
         print(f"  {filepath} already patched, skipping.")
         return
     
-    # Strategy 1: Find psp2_main function body and replace it
-    # The function is: int psp2_main(SceSize args, void *argp)
-    # We want to replace its body to directly call app_main with DNF args
+    # Strategy: Find the line "baselayer_init();" which is the last critical
+    # initialization call before the launcher GUI code begins.
+    # Insert our direct app_main call right after it, and close the function.
     
-    # Look for the psp2_main function 
-    pattern = r'(int\s+psp2_main\s*\([^)]*\)\s*\{)'
-    match = re.search(pattern, content)
+    marker = 'baselayer_init();'
+    marker_pos = content.find(marker)
     
-    if match:
-        # Insert our early return right after the opening brace
-        insertion = """
-    // DNF_VITA_STANDALONE: Skip GRP selector, auto-load DNF 2001
-    {
-        const char *dnf_argv[] = {
-            "",                    // argv[0] placeholder
-            "-gDNF.GRP",          // Load DNF game resource pack  
-            "-xDNFGAME.con",      // Use DNF game CON script
-            "-game_dir",           // Set game directory
-            "ux0:data/DNF/"        // DNF data path on Vita
-        };
-        return app_main(5, dnf_argv);
-    }
-    // Original launcher code below (unreachable):
+    if marker_pos == -1:
+        # Try alternate: look in psp2_main context
+        print(f"  WARNING: Could not find '{marker}' in {filepath}")
+        print(f"  Trying alternate strategy...")
+        
+        # Alternate: find scanForGRPFiles and replace from there
+        alt_marker = 'scanForGRPFiles'
+        alt_pos = content.find(alt_marker)
+        if alt_pos == -1:
+            print(f"  ERROR: Could not find patch point in {filepath}")
+            sys.exit(1)
+        
+        # Go back to find a good insertion point (before variable declarations)
+        # Find "int j, z, k" or "char *int_argv"
+        search_area = content[:alt_pos]
+        for m in ['int j, z, k', 'char *int_argv', 'vita2d_pgf *font']:
+            idx = search_area.rfind(m)
+            if idx != -1:
+                # Go to start of this line
+                line_start = content.rfind('\n', 0, idx) + 1
+                marker_pos = line_start - len(marker) - 1  # Will be adjusted below
+                break
+        
+        if marker_pos == -1:
+            print(f"  ERROR: Could not find suitable patch point")
+            sys.exit(1)
+    
+    # Find the end of the baselayer_init(); line
+    insert_pos = marker_pos + len(marker)
+    
+    # Now find the end of psp2_main function.
+    # Look for the pattern where psp2_main's closing brace is,
+    # followed by the #ifdef _WIN32 or main() function.
+    # The function ends with "return app_main(3, ..." then "}" then "}"
+    
+    # Find the next function definition after psp2_main
+    # Look for "# ifdef _WIN32" or "#ifdef _WIN32" after our insert point
+    end_markers = [
+        '\n# ifdef _WIN32\nint WINAPI',
+        '\n#ifdef _WIN32\nint WINAPI', 
+        '\n# ifdef _WIN32\n',
+        '\nint main(',
+        '\n# else\nint main(',
+    ]
+    
+    end_pos = -1
+    for em in end_markers:
+        idx = content.find(em, insert_pos)
+        if idx != -1:
+            if end_pos == -1 or idx < end_pos:
+                end_pos = idx
+    
+    if end_pos == -1:
+        print(f"  ERROR: Could not find end of psp2_main in {filepath}")
+        sys.exit(1)
+    
+    # The replacement: close initialization, call app_main with DNF args, close function
+    replacement = """
+
+    // DNF_VITA_STANDALONE: Skip GRP selector launcher, auto-load DNF 2001
+    // All vita2d + power initialization above is preserved
+    vita2d_fini();  // Release vita2d resources before SDL takes over
+    
+    const char *dnf_argv[] = {
+        "",                    // argv[0] placeholder
+        "-gDNF.GRP",          // Load DNF game resource pack  
+        "-xDNFGAME.con",      // Use DNF game CON script
+        "-game_dir",           // Set game directory
+        "ux0:data/DNF/"        // DNF data path on Vita
+    };
+    return app_main(5, dnf_argv);
+}
+
 """
-        content = content[:match.end()] + insertion + content[match.end():]
-        
-        with open(filepath, 'w') as f:
-            f.write(content)
-        print(f"  {filepath} patched successfully (Strategy 1: early return)")
-        return
     
-    # Strategy 2: If psp2_main is not found, look for where app_main is called
-    # with int_argv and patch those call sites
-    pattern2 = r'return\s+app_main\s*\(\s*3\s*,\s*\(const\s+char\s*\*\*\)\s*int_argv\s*\)'
-    match2 = re.search(pattern2, content)
+    content = content[:insert_pos] + replacement + content[end_pos:]
     
-    if match2:
-        replacement = """return app_main(5, (const char *[]){
-            "", "-gDNF.GRP", "-xDNFGAME.con", "-game_dir", "ux0:data/DNF/"
-        }) /* DNF_VITA_STANDALONE */"""
-        content = content[:match2.start()] + replacement + content[match2.end():]
-        
-        with open(filepath, 'w') as f:
-            f.write(content)
-        print(f"  {filepath} patched successfully (Strategy 2: replace app_main call)")
-        return
-    
-    print(f"  ERROR: Could not find suitable patch point in {filepath}")
-    print("  Please check the source code structure manually.")
-    sys.exit(1)
+    with open(filepath, 'w') as f:
+        f.write(content)
+    print(f"  {filepath} patched successfully (preserving vita2d init)")
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
