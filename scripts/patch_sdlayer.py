@@ -100,6 +100,8 @@ def patch_sdlayer(filepath):
     return app_main(5, dnf_argv);
 }
 
+#endif  // __PSP2__
+
 """
     
     content = content[:insert_pos] + replacement + content[end_pos:]
