@@ -38,6 +38,9 @@ jobs:
           echo "=== Patching psp2_main in sdlayer.cpp ==="
           python3 ../scripts/patch_sdlayer.py source/build/src/sdlayer.cpp
 
+          echo "=== Patching videoSetMode to bypass SDL_SetVideoMode on PSP2 ==="
+          python3 ../scripts/patch_videomode.py source/build/src/sdlayer.cpp
+
           echo "=== Patching data paths ==="
           # Change log path
           sed -i 's|OSD_SetLogFile("ux0:data/EDuke32/eduke32.log");|OSD_SetLogFile("ux0:data/DNF/dnf2001.log");|g' source/duke3d/src/game.cpp
