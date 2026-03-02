@@ -88,7 +88,8 @@ def patch_sdlayer(filepath):
 
     // DNF_VITA_STANDALONE: Skip GRP selector launcher, auto-load DNF 2001
     // All vita2d + power initialization above is preserved
-    vita2d_fini();  // Release vita2d resources before SDL takes over
+    // NOTE: Do NOT call vita2d_fini() here - the engine uses gpu_texture,
+    // fb_texture and framebuffer globals for rendering every frame
     
     const char *dnf_argv[] = {
         "",                    // argv[0] placeholder
