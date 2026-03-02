@@ -20,8 +20,14 @@ jobs:
       - name: Install build dependencies
         run: |
           apk add --no-cache bash git make python3 gcc g++ cmake zip
+          vdpm libogg
+          vdpm libvorbis
+          vdpm flac
+          vdpm mikmod
           vdpm SDL2
+          vdpm SDL_mixer
           vdpm SDL2_mixer
+          vdpm vita2d
 
       - name: Clone EDuke32-Vita
         run: |
