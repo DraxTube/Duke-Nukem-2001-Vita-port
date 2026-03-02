@@ -26,7 +26,6 @@ jobs:
           vdpm SDL2
           vdpm SDL_mixer
           vdpm SDL2_mixer
-          vdpm vita2d
 
       - name: Clone EDuke32-Vita
         run: |
