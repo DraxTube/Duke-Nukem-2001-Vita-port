@@ -61,7 +61,6 @@ def patch_videosetmode(filepath):
         modechange = 1;
         videomodereset = 0;
         *regrab = 0;
-        setvideomode_sdlcommonpost(*x, *y, c, fs, *regrab);
         return 0;
     }
 #endif
