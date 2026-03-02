@@ -49,9 +49,15 @@ jobs:
           # Change thread name
           sed -i 's|sceKernelCreateThread("EDuke32"|sceKernelCreateThread("DNF2001"|g' source/build/src/sdlayer.cpp
 
+          echo "=== Fixing static linking order in GNUmakefile ==="
+          # SDL_mixer depends on FLAC, vorbis, ogg - these must come AFTER -lSDL_mixer for static linking
+          # The original Makefile has them BEFORE SDL_mixer and is missing -lFLAC entirely
+          sed -i 's|-lSDL_mixer -lSDL -lmikmod -lspeexdsp|-lSDL_mixer -lFLAC -lvorbisfile -lvorbis -logg -lSDL -lmikmod -lspeexdsp|g' GNUmakefile
+
       - name: Build EDuke32 for Vita
         run: |
           cd build_eduke32
+          export PKG_CONFIG_PATH=$VITASDK/arm-vita-eabi/lib/pkgconfig:$PKG_CONFIG_PATH
           make -j$(nproc) PLATFORM=PSP2 RELEASE=1 USE_OPENGL=0 POLYMER=0 NETCODE=0 \
             HAVE_GTK2=0 STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1
 
