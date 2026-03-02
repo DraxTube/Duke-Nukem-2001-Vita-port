@@ -1,0 +1,101 @@
+name: Build DNF 2001 Vita VPK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: vitasdk/vitasdk:latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        run: |
+          apk add --no-cache bash git make python3 gcc g++ cmake zip
+          vdpm SDL2
+          vdpm SDL2_mixer
+
+      - name: Clone EDuke32-Vita
+        run: |
+          git clone --depth 1 https://github.com/Rinnegatamante/EDuke32-Vita.git build_eduke32
+
+      - name: Patch source for standalone DNF 2001
+        run: |
+          cd build_eduke32
+
+          echo "=== Patching psp2_main in sdlayer.cpp ==="
+          python3 ../scripts/patch_sdlayer.py source/build/src/sdlayer.cpp
+
+          echo "=== Patching data paths ==="
+          # Change log path
+          sed -i 's|OSD_SetLogFile("ux0:data/EDuke32/eduke32.log");|OSD_SetLogFile("ux0:data/DNF/dnf2001.log");|g' source/duke3d/src/game.cpp
+
+          # Change all EDuke32 data paths to DNF
+          find source/ \( -name "*.cpp" -o -name "*.c" -o -name "*.h" \) -exec \
+            sed -i 's|ux0:data/EDuke32|ux0:data/DNF|g' {} \;
+          
+          # Change thread name
+          sed -i 's|sceKernelCreateThread("EDuke32"|sceKernelCreateThread("DNF2001"|g' source/build/src/sdlayer.cpp
+
+      - name: Build EDuke32 for Vita
+        run: |
+          cd build_eduke32
+          make -j$(nproc) PLATFORM=PSP2 RELEASE=1 USE_OPENGL=0 POLYMER=0 NETCODE=0 \
+            HAVE_GTK2=0 STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1
+
+      - name: Package VPK
+        run: |
+          cd build_eduke32
+
+          # Find the ELF
+          ELF_FILE=$(find . -maxdepth 1 -name "*.elf" | head -1)
+          if [ -z "$ELF_FILE" ]; then
+            echo "ERROR: No ELF file found!"
+            ls -la
+            exit 1
+          fi
+          echo "Found ELF: $ELF_FILE"
+
+          # Create VELF and EBOOT
+          vita-elf-create "$ELF_FILE" dnf2001.velf
+          vita-make-fself -s dnf2001.velf eboot.bin
+          vita-mksfoex -s TITLE_ID="DNF200100" -d ATTRIBUTE2=12 "DNF 2001 Vita" param.sfo
+
+          # Setup VPK structure
+          mkdir -p vpk/sce_sys/livearea/contents
+          cp eboot.bin vpk/
+          cp param.sfo vpk/sce_sys/
+
+          # Copy assets from project
+          cp ../vita_assets/icon0.png vpk/sce_sys/icon0.png 2>/dev/null || \
+            python3 ../scripts/gen_icon.py vpk/sce_sys/icon0.png
+          cp ../vita_assets/livearea/contents/template.xml vpk/sce_sys/livearea/contents/ 2>/dev/null || \
+            cp ../vita_livearea/template.xml vpk/sce_sys/livearea/contents/
+          cp ../vita_assets/livearea/contents/bg.png vpk/sce_sys/livearea/contents/ 2>/dev/null || \
+            python3 ../scripts/gen_bg.py vpk/sce_sys/livearea/contents/bg.png
+          cp ../vita_assets/livearea/contents/startup.png vpk/sce_sys/livearea/contents/ 2>/dev/null || \
+            python3 ../scripts/gen_startup.py vpk/sce_sys/livearea/contents/startup.png
+
+          # Pack VPK
+          cd vpk
+          vita-pack-vpk -s sce_sys/param.sfo -b eboot.bin \
+            -a sce_sys/icon0.png=sce_sys/icon0.png \
+            -a sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml \
+            -a sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \
+            -a sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png \
+            ../../DNF2001_Vita.vpk
+
+      - name: Upload VPK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DNF2001_Vita
+          path: DNF2001_Vita.vpk
+          if-no-files-found: error
