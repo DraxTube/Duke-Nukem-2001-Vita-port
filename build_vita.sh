@@ -148,6 +148,13 @@ done
 # ── Patch the thread name ───────────────────────────────────────────────────
 sed -i 's|sceKernelCreateThread("EDuke32"|sceKernelCreateThread("DNF2001"|g' "${SDLAYER_FILE}"
 
+# ── Apply performance optimizations ────────────────────────────────────────
+echo "  Applying performance optimizations..."
+python3 "${SCRIPT_DIR}/scripts/patch_performance.py" "${SDLAYER_FILE}"
+
+# Also patch videoSetMode for correct resolution
+python3 "${SCRIPT_DIR}/scripts/patch_videomode.py" "${SDLAYER_FILE}"
+
 # ── Step 3: Copy custom LiveArea assets ─────────────────────────────────────
 echo "[3/5] Setting up VPK assets..."
 
@@ -169,9 +176,13 @@ echo "[4/5] Building EDuke32 for PS Vita (PLATFORM=PSP2)..."
 # Clean previous build
 make clean PLATFORM=PSP2 2>/dev/null || true
 
-# Build with PSP2 target
+# DNF_VITA_PERFORMANCE: Remove debug symbols for release performance
+sed -i 's/-mcpu=cortex-a9 -g -ffast-math/-mcpu=cortex-a9 -ffast-math/g' Common.mak
+
+# Build with PSP2 target (OPTLEVEL=3 for max optimization)
 make -j$(nproc) PLATFORM=PSP2 RELEASE=1 USE_OPENGL=0 POLYMER=0 NETCODE=0 HAVE_GTK2=0 \
-    STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1
+    STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1 \
+    OPTLEVEL=3
 
 echo "  Build completed!"
 
