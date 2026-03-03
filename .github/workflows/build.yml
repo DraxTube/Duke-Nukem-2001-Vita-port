@@ -41,6 +41,9 @@ jobs:
           echo "=== Patching videoSetMode to bypass SDL_SetVideoMode on PSP2 ==="
           python3 ../scripts/patch_videomode.py source/build/src/sdlayer.cpp
 
+          echo "=== Applying performance optimizations ==="
+          python3 ../scripts/patch_performance.py source/build/src/sdlayer.cpp
+
           echo "=== Patching data paths ==="
           # Change log path
           sed -i 's|OSD_SetLogFile("ux0:data/EDuke32/eduke32.log");|OSD_SetLogFile("ux0:data/DNF/dnf2001.log");|g' source/duke3d/src/game.cpp
@@ -61,8 +64,13 @@ jobs:
         run: |
           cd build_eduke32
           export PKG_CONFIG_PATH=$VITASDK/arm-vita-eabi/lib/pkgconfig:$PKG_CONFIG_PATH
+
+          # DNF_VITA_PERFORMANCE: Remove debug symbols flag for release perf
+          sed -i 's/-mcpu=cortex-a9 -g -ffast-math/-mcpu=cortex-a9 -ffast-math/g' Common.mak
+
           make -j$(nproc) PLATFORM=PSP2 RELEASE=1 USE_OPENGL=0 POLYMER=0 NETCODE=0 \
-            HAVE_GTK2=0 STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1
+            HAVE_GTK2=0 STARTUP_WINDOW=0 USE_LIBVPX=0 LUNATIC=0 SIMPLE_MENU=1 \
+            OPTLEVEL=3
 
       - name: Package VPK
         run: |
