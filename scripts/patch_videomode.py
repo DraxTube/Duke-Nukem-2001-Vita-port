@@ -44,20 +44,20 @@ def patch_videosetmode(filepath):
         sys.exit(1)
     
     # Insert PSP2-specific early return right after the opening brace
+    # Keep native 960x544 resolution - do NOT change resolution here
     psp2_block = """
 #ifdef __PSP2__
     // DNF_VITA_SKIP_SDL_SETVIDEOMODE: On Vita, rendering goes through vita2d.
     // SDL_SetVideoMode conflicts with the already-initialized vita2d context.
-    // DNF_VITA_PERFORMANCE: 480x272 internal res, GPU upscales to 960x544.
-    // We set ALL resolution globals since setvideomode_sdlcommonpost is skipped.
+    // Set engine variables directly and return 0 (skip SDL setup).
     {
-        xres  = *x = 480;
-        yres  = *y = 272;
-        xdim  = 480;
-        ydim  = 272;
+        xres  = *x = 960;
+        yres  = *y = 544;
+        xdim  = 960;
+        ydim  = 544;
         bpp   = c;
         fullscreen = fs;
-        bytesperline = vita2d_texture_get_stride(fb_texture);
+        bytesperline = 960;
         numpages   = 1;
         frameplace = 0;
         lockcount  = 0;
