@@ -50,9 +50,10 @@ def patch_videosetmode(filepath):
     // (videoShowFrame, videoUpdatePalette, videoBeginDrawing all use vita2d textures).
     // SDL_SetVideoMode conflicts with the already-initialized vita2d context.
     // Set engine variables directly and return 0 (=no change / skip SDL setup).
+    // DNF_VITA_PERFORMANCE: Using 480x272 internal res, GPU upscales to 960x544
     {
-        xres = *x = 960;
-        yres = *y = 544;
+        xres = *x = 480;
+        yres = *y = 272;
         bpp = c;
         fullscreen = fs;
         numpages = 1;
